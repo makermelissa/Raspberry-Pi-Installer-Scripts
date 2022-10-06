@@ -16,21 +16,12 @@ command 0xc1 0x10  # Power control SAP[2:0];BT[3:0]
 command 0xc5 0x3e 0x28  # VCM control
 command 0xc7 0x86  # VCM control2
 
-#define MADCTL_MY 0x80  ///< Bottom to top
-#define MADCTL_MX 0x40  ///< Right to left
-#define MADCTL_MV 0x20  ///< Reverse Mode
-#define MADCTL_ML 0x10  ///< LCD refresh Bottom to top
-#define MADCTL_RGB 0x00 ///< Red-Green-Blue pixel order
-#define MADCTL_BGR 0x08 ///< Blue-Green-Red pixel order
-#define MADCTL_MH 0x04  ///< LCD refresh right to left
-
 # Command 36h sets the read order from frame memory to the display panel
 # Remember to swap width/height on 90/270 rotations
 command 0x36 0x88 # rotation 0
 #command 0x36 0xE8 # rotation 90
 #command 0x36 0x48 # rotation 180
 #command 0x36 0x28 # rotation 270
-
 
 command 0x37 0x00  # Vertical scroll zero
 command 0x3a 0x55  # COLMOD: Pixel Format Set

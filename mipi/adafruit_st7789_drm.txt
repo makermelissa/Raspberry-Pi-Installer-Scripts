@@ -18,7 +18,7 @@ command 0x13  # _NORON and Delay 10ms
 delay 10
 
 # Command 36h sets the read order from frame memory to the display panel
-# Remember to swap width/height on 90/270 rotations if required
+# Remember to swap width/height on 0/180 rotations if required
 command 0x36 0x00 # rotation 0
 #command 0x36 0xA0 # rotation 90
 #command 0x36 0xC0 # rotation 180
