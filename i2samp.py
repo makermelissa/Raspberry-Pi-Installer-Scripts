@@ -17,6 +17,8 @@ BLACKLIST = "/etc/modprobe.d/raspi-blacklist.conf"
 PRODUCT_NAME = "I2S Amplifier"
 OVERLAY = "googlevoicehat-soundcard"
 CARD_NAME_FALLBACK = "sndrpigooglevoi"
+I2SAMP_INIT_SERVICE = "adafruit-i2samp-init.service"
+APLAY_SERVICE = "aplay.service"
 
 def get_card_name(overlay):
     """Load overlay at runtime and discover the ALSA card id from aplay -l."""
@@ -48,10 +50,13 @@ def uninstall():
     if config is None:
         shell.bail("No Device Tree Detected, not supported")
 
-    print("\nStopping and removing aplay systemd unit...")
-    shell.run_command("sudo systemctl stop aplay", suppress_message=True)
-    shell.run_command("sudo systemctl disable aplay", suppress_message=True)
-    shell.remove("/etc/systemd/system/aplay.service")
+    print("\nStopping and removing systemd units...")
+    shell.run_command(f"sudo systemctl stop {APLAY_SERVICE}", suppress_message=True)
+    shell.run_command(f"sudo systemctl disable {APLAY_SERVICE}", suppress_message=True)
+    shell.run_command(f"sudo systemctl stop {I2SAMP_INIT_SERVICE}", suppress_message=True)
+    shell.run_command(f"sudo systemctl disable {I2SAMP_INIT_SERVICE}", suppress_message=True)
+    shell.remove(f"/etc/systemd/system/{APLAY_SERVICE}")
+    shell.remove(f"/etc/systemd/system/{I2SAMP_INIT_SERVICE}")
     shell.run_command("sudo systemctl daemon-reload")
 
     print(f"Removing Device Tree overlay from {config}")
@@ -192,12 +197,38 @@ pcm.!default {
     shell.run_command(f"amixer -D 'plug:softvol' sset PCM 100% > /dev/null 2>&1")
     shell.run_command("sudo alsactl store")
 
+    print("Installing I2S amplifier initialization systemd unit")
+    shell.write_text_file(f"/etc/systemd/system/{I2SAMP_INIT_SERVICE}", f"""
+[Unit]
+Description=Initialize Adafruit I2S amplifier softvol control.
+After=local-fs.target
+Wants=sound.target
+Before={APLAY_SERVICE}
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=5s
+
+ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 30 ]; do \\
+    aplay -l | grep -qi "{card_name}" && exit 0; \\
+    i=$((i+1)); sleep 1; \\
+    done; exit 1'
+ExecStart=/usr/bin/amixer -D plug:softvol sset PCM 100%
+ExecStart=/usr/sbin/alsactl store
+
+[Install]
+WantedBy=multi-user.target""", append=False)
+
     print("Installing aplay systemd unit")
-    shell.write_text_file("/etc/systemd/system/aplay.service", """
+    shell.write_text_file(f"/etc/systemd/system/{APLAY_SERVICE}", f"""
 [Unit]
 Description=Invoke aplay from /dev/zero at system start.
-After=sound.target
-Wants=sound.target
+Requires={I2SAMP_INIT_SERVICE}
+After={I2SAMP_INIT_SERVICE}
 StartLimitBurst=5
 StartLimitIntervalSec=60
 
@@ -211,12 +242,13 @@ ExecStart=/usr/bin/aplay -D default -t raw -r 44100 -c 2 -f S16_LE /dev/zero
 WantedBy=multi-user.target""", append=False)
 
     shell.run_command("sudo systemctl daemon-reload")
-    shell.run_command("sudo systemctl disable aplay")
+    shell.run_command(f"sudo systemctl enable {I2SAMP_INIT_SERVICE}")
+    shell.run_command(f"sudo systemctl disable {APLAY_SERVICE}")
     print("\nYou can optionally activate '/dev/zero' playback in\n"
         "the background at boot. This will remove all\n"
         "popping/clicking but does use some processor time.\n\n")
     if shell.prompt("Activate '/dev/zero' playback in background? [RECOMMENDED]\n", default="y"):
-        shell.run_command("sudo systemctl enable aplay")
+        shell.run_command(f"sudo systemctl enable {APLAY_SERVICE}")
         reboot = True
 
     if driver_loaded("max98357a"):
