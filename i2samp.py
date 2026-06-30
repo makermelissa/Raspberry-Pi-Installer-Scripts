@@ -201,7 +201,7 @@ pcm.!default {
     shell.write_text_file(f"/etc/systemd/system/{I2SAMP_INIT_SERVICE}", f"""
 [Unit]
 Description=Initialize Adafruit I2S amplifier softvol control.
-After=local-fs.target
+After=local-fs.target sound.target
 Wants=sound.target
 Before={APLAY_SERVICE}
 StartLimitBurst=5
@@ -214,11 +214,13 @@ Restart=on-failure
 RestartSec=5s
 
 ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 30 ]; do \\
-    aplay -l | grep -qi "{card_name}" && exit 0; \\
-    i=$((i+1)); sleep 1; \\
+    /usr/bin/aplay -l | /bin/grep -qi "{card_name}" && exit 0; \\
+    i=$((i+1)); /bin/sleep 1; \\
     done; exit 1'
-ExecStart=/usr/bin/amixer -D plug:softvol sset PCM 100%
-ExecStart=/usr/sbin/alsactl store
+ExecStart=/bin/sh -c '/usr/bin/amixer -c "{card_name}" controls | \\
+    /bin/grep -qi "name=.*PCM" || \\
+    /usr/bin/amixer -D plug:softvol sset PCM 100%'
+ExecStart=-/usr/sbin/alsactl restore
 
 [Install]
 WantedBy=multi-user.target""", append=False)
